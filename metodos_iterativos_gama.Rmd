@@ -1,0 +1,374 @@
+---
+title: "Métodos iterativos para inferência paramétrica"
+author: "Gustavo Almeida Silva"
+output: 
+  html_document:
+    theme: united
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Questão 1
+
+### A
+
+Nessa primeira questão, iremos utilizar metodos numericos, atarves da função **optim()**, para maximar a função de log-verossimilhnça da distribuição $Gama(\alpha,\beta)$
+
+Obtivemos a função de log-verossimilhnça da seguinte forma:
+
+Seja $X\text{~}Gama(\alpha,\beta)$, $X$ possui a seguinte função de densidade
+$$Gama(\alpha,\beta)=\frac{\beta ^{\alpha }}{\Gamma \left(\alpha \right)}\cdot \:x^{\alpha -1}\cdot \:exp\left(-\beta \:x\right)$$
+Para encontrar a função de verossimilhnça, estaremos tratando de um caso amostral, e portanto a $f.d.p$ conjunta é dada como
+
+$$\prod_{i=1}^N \:\frac{\beta ^{\alpha }}{\Gamma \left(\alpha \right)}\cdot \:x_i^{\alpha -1}\cdot \:exp\left(-\beta \:x_i\right)$$
+
+Sabemos que a função de verossimilhança é a $f.d.p$ conjunta com a indicadora em função de $\theta$.
+Portanto aplicando o *log()* na verossimilhança temos a seguinte função
+$$-nlog\Gamma \left(\alpha \right)-\alpha nlog\beta +\left(\alpha -1\right)\sum logx_i-\frac{1}{\beta }\sum x_i$$
+
+Assim, utilizando a função **optim**, iremos maximizar a função em $\alpha,\beta$
+
+```{r eval=FALSE, include=TRUE}
+ll_func_gamma = function(data_sample,params1,params2){
+  ifelse(params1='shape' && params2='rate',shape0=params1,rate0=params2)
+      shape0=as.character(params1)
+      rate0=as.character(params2) 
+      
+    obj_func=dgamma
+    
+    obj_func=lapply(c(shape0,rate0),obj_func)
+    sum_func=call(obj_func)
+    final_func=log(eval(sum_func))
+
+}
+```
+
+```{r include=FALSE}
+ll_func_gamma = function(data_sample,params1,params2){
+  density_func=dgamma
+  info_params = c("shape", "rate")
+  
+  
+  function(params){
+    
+     # Definindo a lista dos parâmetros
+    params_list = as.list(params)
+     # Definindo os nomes dos parâmetros
+    names(params_list) = info_params
+     # Definindo a amostra na lista de parâmetros
+    params_list$x = data_sample
+     # Calculando a funçãp de verossimilança
+    sum(log(do.call(density_func, params_list)))
+  }
+}
+```
+
+
+Testaremos a função com 2 exemplos, o primeiro utilizando o gerador de numeros aleatorios do proprio R (dados1), e o segundo utilizando os dados retirados da questão **7.10.c** do livro do Casella (dados2)
+```{r}
+sample_example1=rgamma(500,shape=1,rate = 2)
+sample_example2=c(22.0,23.9,20.9,23.8,25,24,21.7,23.8,22.8,23.1,23.1,23.5,23,23)
+```
+
+### Iteração dados - 1
+
+```{r}
+ll_gamma1 = ll_func_gamma(data_sample=sample_example1,params1='shape',params2='rate')
+estimated_params1 = optim(c(0,0), ll_gamma1, method = c("L-BFGS-B"),control=list(fnscale=-1), lower = 0.001)$par
+
+```
+
+Tivemos os seguintes parametros estimados: $\alpha=$ `r estimated_params1[1]`
+                                           $\beta=$ `r estimated_params1[2]`
+
+### Iteração dados - 2
+
+```{r}
+ll_gamma2 = ll_func_gamma(data_sample=sample_example2,params1='shape',params2='rate')
+estimated_params2 = optim(c(0,0), ll_gamma2, method = c("L-BFGS-B"),control=list(fnscale=-1), lower = 0.001)$par
+```
+
+Tivemos os seguintes parametros estimados: $\alpha=$ `r estimated_params2[1]`
+                                           $\beta=$ `r estimated_params2[2]`
+                                           
+### B.1
+Sabemos que não é possivel encontrar funções explicitas de $\alpha$ e de $\beta$ no para estimação parametrica. Assim, uma outra forma de encontarmos esses parametros é reduzir o problema a maximização de uma função univaridada.
+
+Nesse exemplo, encontraremos uma função de $\beta$ com o termo independente $\alpha$
+
+
+### Gride de valores dados - 1 
+```{r}
+sample_mean1=mean(sample_example1)
+rating_alpha=runif(500,-1,600)
+beta_estimated=rating_alpha/sample_mean1
+
+
+iterative_params=sapply(seq_along(rating_alpha), function(i) ll_gamma1(c(rating_alpha[i], beta_estimated[i])))
+plot(rating_alpha,iterative_params)
+```
+
+
+```{r}
+rating_alpha=runif(500,0,10)
+beta_estimated=rating_alpha/sample_mean1
+
+
+iterative_params=sapply(seq_along(rating_alpha), function(i) ll_gamma1(c(rating_alpha[i], beta_estimated[i])))
+plot(rating_alpha,iterative_params)
+```
+
+
+```{r}
+find_max=which.max(iterative_params)
+rating_alpha=rating_alpha[find_max]
+beta_estimated=rating_alpha/sample_mean1
+
+```
+
+Assim, temos os seguintes parametros estimados: $\alpha=$ `r rating_alpha`
+                                                $\beta=$ `r beta_estimated`
+
+### Gride de valores dados - 2
+
+```{r}
+sample_mean2=mean(sample_example2)
+rating_alpha=runif(500,-1,600)
+beta_estimated=rating_alpha/sample_mean2
+
+
+iterative_params=sapply(seq_along(rating_alpha), function(i) ll_gamma2(c(rating_alpha[i], beta_estimated[i])))
+plot(rating_alpha,iterative_params)
+```
+
+
+```{r}
+rating_alpha=runif(500,400,1000)
+beta_estimated=rating_alpha/sample_mean2
+
+
+iterative_params=sapply(seq_along(rating_alpha), function(i) ll_gamma2(c(rating_alpha[i], beta_estimated[i])))
+plot(rating_alpha,iterative_params)
+```
+
+
+```{r}
+find_max=which.max(iterative_params)
+rating_alpha=rating_alpha[find_max]
+beta_estimated=rating_alpha/sample_mean2
+```
+
+Assim, temos os seguintes parametros estimados: $\alpha=$ `r rating_alpha`
+                                                $\beta=$ `r beta_estimated`
+
+### B.2
+
+### Optim em dados - 1
+```{r}
+to_max_ll = function(alpha){
+  beta = alpha/mean(sample_example1)
+  ll_gamma1(c(alpha, beta))
+}
+
+beta_estimated=mean(sample_example1)/var(sample_example1)
+rating_alpha=mean(sample_example1)*beta_estimated
+```
+
+```{r}
+alpha=optim(rating_alpha, to_max_ll,
+      method = c("L-BFGS-B"),
+      control=list(fnscale=-1), lower = 0.001)$par
+beta = alpha/mean(sample_example1)
+
+```
+
+
+### Optim em dados - 2
+
+```{r}
+to_max_ll = function(alpha){
+   # Calculando beta
+  beta = alpha/mean(sample_example2)
+   # calculando a verossimilhança
+  ll_gamma2(c(alpha, beta))
+}
+
+beta_estimated=mean(sample_example2)/var(sample_example2)
+rating_alpha=mean(sample_example2)*beta_estimated
+```
+
+```{r}
+alpha=optim(rating_alpha, to_max_ll,
+      method = c("L-BFGS-B"),
+      control=list(fnscale=-1), lower = 0.01)$par
+beta = alpha/mean(sample_example2)
+
+```
+
+
+## Questão 2
+
+
+### Bolfarine e Sandoval
+
+Seja X uma **v.a** com $f.d.p$
+$$f(x;\theta)=\frac{1}{2}(1+\theta x)\text{, }-1\leq x\leq1\text{, }-1\leq \theta\leq1$$
+Para estimar o seu parametro $\theta$ via **Newton-Raphson-** primeiro temos que encontrar valores amostrais dessa distribuição.
+
+Como o R não possui um gerador proprio para essa **v.a**, podemos utilizar o método da função quantilica ou o método da aceitação-reijeição para a geração de valores amostrais
+
+Faremos os testes utilizando os 2 metodos
+
+### Geração via quantilica
+
+Para gerarmos os valores via função quantilica temos que seguir 3 passos.
+
+* Encontrar sua **f.d.a**
+
+* Encontrar a inversa da **f.d.a**, chamada de função quantilica
+
+* Utilizar metodo Monte Carlo como dominio dessa função visando encontrar **f(x)**
+
+(Fixaremos $\theta=0.5$ para os exemplos)
+
+```{r}
+bolfarine_gen_quant=function(teta){
+u=runif(1000,0,1)
+(-1+sqrt(1+4*teta*u-2*teta+(teta**2)))/teta
+}
+
+func_alva=function(x) (1+0.5*x)/2
+bolfarine_sample_quant=bolfarine_gen_quant(0.5)
+
+
+```
+
+### Geração via aceitação-rejeição
+
+A geração via método da aceitação-rejeição surge como alternativa ao metodo da função quantilica. Ele é utilizado quando o calculo da **f.d.a** (que utiliza uma integral) se torna muito complicado ou quando a sua **f.d.a** não possui função inversa explícita.
+
+Temos que seguir os seguintes passos nesse método
+
+* Utilizar sua **f.d.p** como função de alvo
+
+* Utilizar alguma outra distribuição com gerador aleatório conhecido como auxiliar, onde essa função auxiliar deve ter $f_{aux}(k)>f_{alvo}(k)\forall k $
+
+* Utilizar valores aleatórios da função auxiliar para obter valores da função alvo
+
+
+```{r}
+bolfarine_gen_rej_acep=function(teta){
+  
+  ##Armazenando a função alva
+  obj_func=function(x) (1+teta*x)/2
+  
+  ##Armazenando a função candidata
+  aux_func=function(x)dunif(x,min=-1,max=1)
+  
+  obj=vector()
+  M <- optimize(f = function(x)obj_func(x)/aux_func(x), interval = c(-1,1), maximum = T)$objective
+  
+  #Utilizando o metodo da aceitação rejeicao para a criacao dos valores aleatorios
+  j=1
+  for(i in 1:1000){
+    u=runif(1)
+    y=runif(1,-1,1)
+    if(u*M<=obj_func(y)/aux_func(y)){
+      obj[j]=  y
+      j=j+1
+    }
+  }
+  return(obj)
+}
+
+```
+
+
+```{r}
+bolfarine_sample_rej_acep=bolfarine_gen_rej_acep(0.5)
+```
+
+```{r}
+par(mfrow=c(1,2))
+hist(bolfarine_sample_quant,xlim=c(-1,1),freq = F,main='Metodo Quantilica',col='#FC5F00')
+curve(func_alva,-1,1,add = T)
+hist(bolfarine_sample_rej_acep,xlim=c(-1,1),freq = F,main='Metodo Aceitação-Rejeição',col='#FD843A')
+curve(func_alva,-1,1,add = T)
+
+```
+
+
+### Estimação de $\theta$
+
+```{r}
+iterative_bolfarine=function(data,error_choice=1e-6){
+  
+  teta_estim=mean(data)
+  s_teta=function(teta_hat) sum(data/(1+(teta_hat*data)))
+  h_teta=function(teta_hat) sum((data**2)/((1+teta_hat*data)**2))
+  
+  error_eval=1
+  i=1
+  while(error_eval>error_choice)
+  {
+    teta_estim[i+1]=teta_estim[i]+(s_teta(teta_estim[i])/h_teta(teta_estim[i]))
+    error_eval=teta_estim[i+1]-teta_estim[i]
+    print(teta_estim)
+    i=i+1
+  }
+  
+  return(teta_estim[i])
+}
+```
+
+```{r}
+ite_bol_quant=iterative_bolfarine(bolfarine_sample_quant)
+
+```
+
+```{r}
+ite_bol_AR=iterative_bolfarine(bolfarine_sample_rej_acep)
+```
+
+Obtivemos os seguintes resultados: $\theta$ via metodo quantílica = `r ite_bol_quant`
+                                   $\theta$ via metodo aceitação-rejeição = `r ite_bol_AR`
+
+### Cauchy
+Seja $X$ uma **v.a**, onde $X\text{~}Cauchy(\theta)$, com **f.d.p**
+$$f_X(x;\theta)=\pi(1+(x-\theta)^2)^{-1}$$
+
+```{r}
+iterative_cauchy=function(data,error_choice=1e-6){
+  
+  teta_estim=mean(data)
+  s_teta=function(teta_hat) sum(2*(data-teta_hat)/(1+((data - teta_hat)**2)))
+  h_teta=function(teta_hat) 2*sum((1-((data-teta_hat)**2))/((1+((data - teta_hat)**2))**2))
+  
+  error_eval=1
+  i=1
+  while(error_eval>error_choice)
+    {
+      teta_estim[i+1]=teta_estim[i]+(s_teta(teta_estim[i])/h_teta(teta_estim[i]))
+      error_eval=abs(teta_estim[i+1]-teta_estim[i])
+        i=i+1
+    }
+  
+   return(teta_estim[i])
+  }
+```
+
+
+Gerando valores aleatórios utilizando o gerador do próprio R
+
+```{r}
+cauchy_sample=rcauchy(100,10)  
+iterative_cauchy(cauchy_sample)
+```
+
